@@ -26,7 +26,7 @@ A small-scale language model demo built with Node.js + Express and the Gemini 2.
 ## Prerequisites
 
 - [Node.js 18+](https://nodejs.org/)
-- An [Anthropic API key](https://console.anthropic.com/)
+- A [Gemini API key](https://aistudio.google.com/app/apikey) <-- For free usage. Use Anthropic if you are willing to pay for credits.
 
 ## Setup
 
@@ -61,7 +61,7 @@ character-chat/
 ├── public/
 │   └── index.html       # Frontend (HTML + CSS + JS, all in one file)
 ├── server/
-│   └── index.js         # Express backend + Anthropic API proxy
+│   └── index.js         # Express backend + Gemini API proxy
 ├── .env.example         # Template for your API key (copy → .env)
 ├── .gitignore           # Keeps .env and node_modules out of git
 ├── package.json
