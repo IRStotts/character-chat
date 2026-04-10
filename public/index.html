@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Character Chat — Small-Scale Language Model Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f5f5f3;
+      --surface: #ffffff;
+      --surface2: #f0efed;
+      --border: rgba(0,0,0,0.12);
+      --text: #1a1a1a;
+      --text-muted: #6b6b6b;
+      --text-hint: #a0a0a0;
+      --accent: #2563eb;
+      --accent-bg: #eff6ff;
+      --accent-text: #1d4ed8;
+      --success-bg: #f0fdf4;
+      --success-text: #166534;
+      --danger: #dc2626;
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111110;
+        --surface: #1c1c1a;
+        --surface2: #252522;
+        --border: rgba(255,255,255,0.10);
+        --text: #f0ede8;
+        --text-muted: #a09d98;
+        --text-hint: #6b6866;
+        --accent: #3b82f6;
+        --accent-bg: #1e3a5f;
+        --accent-text: #93c5fd;
+        --success-bg: #14281e;
+        --success-text: #86efac;
+        --danger: #f87171;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+      max-width: 560px;
+    }
+    header h1 { font-size: 1.75rem; font-weight: 600; letter-spacing: -0.02em; }
+    header p { font-size: 0.9rem; color: var(--text-muted); margin-top: 0.4rem; line-height: 1.6; }
+
+    .card {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+    }
+
+    #app {
+      width: 100%;
+      max-width: 620px;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    /* Setup row */
+    #setup-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    #setup-row label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    #char-input {
+      flex: 1;
+      min-width: 140px;
+      padding: 8px 12px;
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface2);
+      color: var(--text);
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    #char-input:focus { border-color: var(--accent); }
+    #char-input::placeholder { color: var(--text-hint); }
+
+    button {
+      padding: 8px 14px;
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface2);
+      color: var(--text);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.12s, opacity 0.12s;
+      white-space: nowrap;
+    }
+    button:hover:not(:disabled) { background: var(--border); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    button.primary:hover:not(:disabled) { opacity: 0.88; }
+
+    #char-badge {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
+      color: var(--accent-text);
+      background: var(--accent-bg);
+      border-radius: var(--radius-sm);
+      padding: 5px 10px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+    #char-badge span { font-weight: 500; }
+    #change-btn {
+      font-size: 0.78rem;
+      padding: 2px 8px;
+      background: transparent;
+      border: 0.5px solid var(--accent-text);
+      color: var(--accent-text);
+      border-radius: var(--radius-sm);
+    }
+    #change-btn:hover { background: var(--accent-bg); }
+
+    /* Chat area */
+    #chat-area {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius);
+      min-height: 340px;
+      max-height: 440px;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      scroll-behavior: smooth;
+    }
+    #empty-state {
+      margin: auto;
+      text-align: center;
+      color: var(--text-hint);
+      font-size: 0.88rem;
+      line-height: 1.7;
+      padding: 2rem;
+    }
+
+    .msg { display: flex; gap: 10px; align-items: flex-end; }
+    .msg.user { flex-direction: row-reverse; }
+
+    .bubble {
+      max-width: 74%;
+      padding: 9px 13px;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      line-height: 1.65;
+      word-break: break-word;
+    }
+    .msg.char .bubble {
+      background: var(--surface2);
+      color: var(--text);
+      border-bottom-left-radius: 4px;
+    }
+    .msg.user .bubble {
+      background: var(--accent-bg);
+      color: var(--accent-text);
+      border-bottom-right-radius: 4px;
+    }
+
+    .avatar {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.72rem; font-weight: 600;
+      flex-shrink: 0;
+    }
+    .avatar.char { background: var(--success-bg); color: var(--success-text); }
+    .avatar.user { background: var(--accent-bg); color: var(--accent-text); }
+
+    /* Typing indicator */
+    .typing { display: flex; gap: 5px; align-items: center; padding: 4px 2px; }
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--text-hint);
+      animation: blink 1.3s infinite;
+    }
+    .dot:nth-child(2) { animation-delay: 0.2s; }
+    .dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0%,80%,100%{opacity:0.2} 40%{opacity:1} }
+
+    /* Input row */
+    #input-row { display: flex; gap: 8px; }
+    #msg-input {
+      flex: 1;
+      padding: 9px 13px;
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface2);
+      color: var(--text);
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    #msg-input:focus { border-color: var(--accent); }
+    #msg-input::placeholder { color: var(--text-hint); }
+
+    /* Error */
+    #error-banner {
+      display: none;
+      background: #fef2f2;
+      color: var(--danger);
+      border: 0.5px solid #fca5a5;
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      font-size: 0.84rem;
+    }
+    @media (prefers-color-scheme: dark) {
+      #error-banner { background: #2d1515; border-color: #7f1d1d; }
+    }
+
+    footer {
+      font-size: 0.75rem;
+      color: var(--text-hint);
+      text-align: center;
+      margin-top: 0.5rem;
+      line-height: 1.6;
+    }
+
+    /* Suggested starters */
+    #starters {
+      display: none;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .starter-btn {
+      font-size: 0.78rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--surface2);
+      color: var(--text-muted);
+      border: 0.5px solid var(--border);
+    }
+    .starter-btn:hover { color: var(--text); background: var(--border); }
+
+    /* Disclaimer modal */
+    #disclaimer-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(3px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 1rem;
+    }
+    #disclaimer-overlay.hidden { display: none; }
+
+    #disclaimer-box {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius);
+      max-width: 580px;
+      width: 100%;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+
+    #disclaimer-header {
+      padding: 1.25rem 1.5rem 0.75rem;
+      border-bottom: 0.5px solid var(--border);
+      flex-shrink: 0;
+    }
+    #disclaimer-header h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    #disclaimer-header p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 0.2rem;
+    }
+
+    #disclaimer-body {
+      padding: 1rem 1.5rem;
+      overflow-y: auto;
+      flex: 1;
+      font-size: 0.82rem;
+      line-height: 1.7;
+      color: var(--text-muted);
+    }
+    #disclaimer-body h3 {
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text);
+      margin: 1rem 0 0.25rem;
+    }
+    #disclaimer-body h3:first-child { margin-top: 0; }
+    #disclaimer-body p { margin-bottom: 0.25rem; }
+
+    #disclaimer-footer {
+      padding: 1rem 1.5rem;
+      border-top: 0.5px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    #disclaimer-footer label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      flex: 1;
+      min-width: 180px;
+    }
+    #disclaimer-accept-btn {
+      padding: 9px 20px;
+      font-size: 0.88rem;
+    }
+    #disclaimer-accept-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Disclaimer modal -->
+<div id="disclaimer-overlay" role="dialog" aria-modal="true" aria-labelledby="disclaimer-title">
+  <div id="disclaimer-box">
+    <div id="disclaimer-header">
+      <h2 id="disclaimer-title">⚠️ Terms of Use &amp; Disclaimer</h2>
+      <p>Please read and accept before continuing.</p>
+    </div>
+    <div id="disclaimer-body">
+      <h3>AI-Generated Content</h3>
+      <p>All characters portrayed - whether real people, historical figures, or fictional characters - are AI-generated imitations only. Responses are produced by a large language model and do not represent the actual views, opinions, statements, beliefs, or personality of any real or fictional person.</p>
+
+      <h3>Not Real People</h3>
+      <p>AI-generated responses are not authored by, endorsed by, or affiliated with any person, estate, studio, publisher, or rights holder. Any resemblance to actual statements made by real individuals is coincidental and unintentional.</p>
+
+      <h3>Intellectual Property</h3>
+      <p>Fictional characters may be protected by copyright and trademark law. This tool is intended for personal, educational, and non-commercial use only. No claim of ownership over any character, likeness, or intellectual property is made by this application.</p>
+
+      <h3>No Professional Advice</h3>
+      <p>Nothing generated by this tool constitutes legal, medical, psychological, financial, or any other form of professional advice. Do not rely on AI-generated content for real-world decisions.</p>
+
+      <h3>AI Limitations &amp; Inaccuracies</h3>
+      <p>AI models can and do produce inaccurate, misleading, or offensive content. Responses may misrepresent real people, contain factual errors, or reflect biases present in training data. Use critical judgment at all times.</p>
+
+      <h3>Age Requirement</h3>
+      <p>This tool is intended for users aged 18 and over. It is not designed, tested, or appropriate for use by minors. By continuing, you confirm that you are at least 18 years of age.</p>
+
+      <h3>Limitation of Liability</h3>
+      <p>This is an independent, non-commercial demonstration project. The operator assumes no liability for any harm, misrepresentation, or damages arising from use of this tool. Use is entirely at your own risk.</p>
+    </div>
+    <div id="disclaimer-footer">
+      <label>
+        <input type="checkbox" id="disclaimer-checkbox" />
+        I have read and agree to these terms
+      </label>
+      <button class="primary" id="disclaimer-accept-btn" disabled>Continue</button>
+    </div>
+  </div>
+</div>
+
+<header>
+  <h1>🎭 Character Chat</h1>
+  <p>A small-scale language model demo. Enter any character name and have a conversation with an AI imitation of them.</p>
+</header>
+
+<div id="app">
+  <!-- Setup -->
+  <div class="card">
+    <div id="setup-row">
+      <label for="char-input">Character:</label>
+      <input id="char-input" type="text" maxlength="100"
+        placeholder="e.g. Sherlock Holmes, Yoda, Gandalf…" autocomplete="off" spellcheck="false" />
+      <button class="primary" id="start-btn">Start chat</button>
+    </div>
+    <div id="char-badge"></div>
+    <div id="starters"></div>
+  </div>
+
+  <!-- Error -->
+  <div id="error-banner" role="alert"></div>
+
+  <!-- Chat -->
+  <div id="chat-area" role="log" aria-live="polite" aria-label="Chat messages">
+    <div id="empty-state">
+      Enter a character name above and press <strong>Start chat</strong>.<br/>
+      Try: Sherlock Holmes, Yoda, Hermione Granger, Socrates…
+    </div>
+  </div>
+
+  <!-- Input -->
+  <div id="input-row">
+    <input id="msg-input" type="text" maxlength="500"
+      placeholder="Say something…" disabled autocomplete="off" />
+    <button class="primary" id="send-btn" disabled>Send</button>
+  </div>
+
+  <footer>
+    All responses are AI-generated imitations kept family-friendly. Your API key stays on the server and is never sent to your browser.
+  </footer>
+</div>
+
+<script>
+  // DOM refs
+  const charInput    = document.getElementById('char-input');
+  const startBtn     = document.getElementById('start-btn');
+  const charBadge    = document.getElementById('char-badge');
+  const chatArea     = document.getElementById('chat-area');
+  const msgInput     = document.getElementById('msg-input');
+  const sendBtn      = document.getElementById('send-btn');
+  const errorBanner  = document.getElementById('error-banner');
+  const startersEl   = document.getElementById('starters');
+
+  let character = '';
+  let history   = [];   // [{role, content}]
+  let loading   = false;
+
+  const STARTERS = [
+    'Tell me about yourself.',
+    'What is your greatest challenge?',
+    'What advice would you give me?',
+    'What do you think of the modern world?'
+  ];
+
+  // Helpers
+  function initials(name) {
+    return name.split(/\s+/).map(w => w[0] || '').join('').toUpperCase().slice(0, 2) || '?';
+  }
+
+  function showError(msg) {
+    errorBanner.textContent = msg;
+    errorBanner.style.display = 'block';
+  }
+  function clearError() { errorBanner.style.display = 'none'; }
+
+  function scrollBottom() { chatArea.scrollTop = chatArea.scrollHeight; }
+
+  // Character setup
+  function setCharacter(name) {
+    character = name.trim().replace(/[<>]/g, ''); // strip any stray HTML chars
+    if (!character) return;
+    clearError();
+
+    charBadge.innerHTML = `<span>Now chatting with: ${escHtml(character)}</span>
+      <button id="change-btn">Change character</button>`;
+    charBadge.style.display = 'flex';
+    document.getElementById('change-btn').addEventListener('click', resetChat);
+
+    // Show conversation starters
+    startersEl.innerHTML = STARTERS.map(
+      s => `<button class="starter-btn">${escHtml(s)}</button>`
+    ).join('');
+    startersEl.style.display = 'flex';
+    startersEl.querySelectorAll('.starter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        msgInput.value = btn.textContent;
+        sendMessage();
+      });
+    });
+
+    msgInput.disabled = false;
+    sendBtn.disabled  = false;
+    history = [];
+    chatArea.innerHTML = '';
+    addBubble('char', `Greetings! I am ${escHtml(character)}. What would you like to ask me?`, true);
+    msgInput.focus();
+  }
+
+  function resetChat() {
+    character = '';
+    history   = [];
+    charInput.value = '';
+    charBadge.style.display  = 'none';
+    startersEl.style.display = 'none';
+    msgInput.disabled = true;
+    sendBtn.disabled  = true;
+    clearError();
+    chatArea.innerHTML = `<div id="empty-state">
+      Enter a character name above and press <strong>Start chat</strong>.<br/>
+      Try: Sherlock Holmes, Yoda, Hermione Granger, Socrates…
+    </div>`;
+  }
+
+  // Message rendering
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+              .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function addBubble(role, text, skipHistory) {
+    const isUser = role === 'user';
+    const wrap = document.createElement('div');
+    wrap.className = `msg ${isUser ? 'user' : 'char'}`;
+
+    const av = document.createElement('div');
+    av.className = `avatar ${isUser ? 'user' : 'char'}`;
+    av.textContent = isUser ? 'You' : initials(character);
+
+    const bub = document.createElement('div');
+    bub.className = 'bubble';
+    bub.textContent = text; // textContent prevents XSS
+
+    wrap.appendChild(av);
+    wrap.appendChild(bub);
+    chatArea.appendChild(wrap);
+    scrollBottom();
+
+    if (!skipHistory) history.push({ role: isUser ? 'user' : 'assistant', content: text });
+  }
+
+  function showTyping() {
+    const wrap = document.createElement('div');
+    wrap.className = 'msg char';
+    wrap.id = 'typing';
+    const av = document.createElement('div');
+    av.className = 'avatar char';
+    av.textContent = initials(character);
+    const bub = document.createElement('div');
+    bub.className = 'bubble';
+    bub.innerHTML = '<div class="typing"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>';
+    wrap.appendChild(av);
+    wrap.appendChild(bub);
+    chatArea.appendChild(wrap);
+    scrollBottom();
+  }
+  function removeTyping() { document.getElementById('typing')?.remove(); }
+
+  // Send message
+  async function sendMessage() {
+    const text = msgInput.value.trim();
+    if (!text || loading || !character) return;
+    if (text.length > 500) { showError('Message too long (max 500 characters).'); return; }
+
+    loading = true;
+    clearError();
+    msgInput.value = '';
+    msgInput.disabled = true;
+    sendBtn.disabled  = true;
+
+    // Cap history at 38 prior messages so the new user + future assistant
+    // messages stay within the server's 40-message limit.
+    if (history.length >= 38) history = history.slice(-38);
+
+    history.push({ role: 'user', content: text });
+    addBubble('user', text, true);
+    showTyping();
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ character, messages: history })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || `Server error (${res.status})`);
+      }
+
+      removeTyping();
+      addBubble('char', data.reply, true);
+      history.push({ role: 'assistant', content: data.reply });
+
+    } catch (err) {
+      removeTyping();
+      history.pop(); // remove the failed user message from history
+      showError('Error: ' + (err.message || 'Something went wrong. Please try again.'));
+    }
+
+    loading = false;
+    msgInput.disabled = false;
+    sendBtn.disabled  = false;
+    msgInput.focus();
+  }
+
+  // Event listeners
+  startBtn.addEventListener('click', () => {
+    const n = charInput.value.trim();
+    if (n) setCharacter(n);
+  });
+  charInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { const n = charInput.value.trim(); if (n) setCharacter(n); }
+  });
+  sendBtn.addEventListener('click', sendMessage);
+  msgInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+
+  // Disclaimer modal
+  (function () {
+    const overlay   = document.getElementById('disclaimer-overlay');
+    const checkbox  = document.getElementById('disclaimer-checkbox');
+    const acceptBtn = document.getElementById('disclaimer-accept-btn');
+
+    // If already accepted in a previous session, hide immediately
+    if (localStorage.getItem('disclaimer-accepted') === '1') {
+      overlay.classList.add('hidden');
+      return;
+    }
+
+    // Enable the button only once the checkbox is ticked
+    checkbox.addEventListener('change', () => {
+      acceptBtn.disabled = !checkbox.checked;
+    });
+
+    acceptBtn.addEventListener('click', () => {
+      if (!checkbox.checked) return;
+      localStorage.setItem('disclaimer-accepted', '1');
+      overlay.classList.add('hidden');
+    });
+  })();
+</script>
+</body>
+</html>
