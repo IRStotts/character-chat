@@ -1,4 +1,4 @@
-# 🎭 Character Chat
+# Character Chat
 
 A small-scale language model demo built with Node.js + Express and the Gemini 2.5 API. Type any character name - fictional, historical, or literary - and have a real conversation with an AI imitation of them.
 
